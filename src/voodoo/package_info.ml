@@ -1,5 +1,7 @@
 (* Generate a package.json describing the content of that package *)
 
+open Ppx_yojson_conv_lib.Yojson_conv.Primitives
+
 type 'a library = {
   name : string;
   modules : 'a list;
