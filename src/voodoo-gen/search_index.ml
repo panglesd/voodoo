@@ -24,8 +24,9 @@ module Generate = struct
         |> List.concat |> String.concat " "
     | `Heading (_, _, h) -> link_content h
     | `Modules _ -> ""
-    | `Code_block (_, s) -> s |> get_value
+    | `Code_block (_, s, _) -> s |> get_value
     | `Verbatim v -> v
+    | `Table _ -> ""
     | `Math_block m -> m
 
   and nestable (n : Odoc_model.Comment.nestable_block_element) =
@@ -40,8 +41,8 @@ module Generate = struct
     | `Word w -> w
     | `Math_span m -> m
     | `Space -> " "
-    | `Reference (_, c) -> link_content c
-    | `Link (_, c) -> link_content c
+    | `Reference (_, _) -> ""
+    | `Link (_, _) -> ""
     | `Styled (_, b) -> inlines b
     | `Raw_markup (_, _) -> ""
 
@@ -50,51 +51,10 @@ module Generate = struct
     |> List.map non_link_inline_element
     |> String.concat ""
 
-  and non_link_inline_element (n : Odoc_model.Comment.non_link_inline_element) =
-    inline (n :> Odoc_model.Comment.inline_element)
+  and non_link_inline_element _n = ""
 
-  let rec full_name_aux : Odoc_model.Paths.Identifier.t -> string list =
-    let open Odoc_model.Names in
-    let open Odoc_model.Paths in
-    fun x ->
-      match x.iv with
-      | `Root (_, name) -> [ ModuleName.to_string name ]
-      | `Page (_, name) -> [ PageName.to_string name ]
-      | `LeafPage (_, name) -> [ PageName.to_string name ]
-      | `Module (parent, name) ->
-          ModuleName.to_string name :: full_name_aux (parent :> Identifier.t)
-      | `Parameter (parent, name) ->
-          ModuleName.to_string name :: full_name_aux (parent :> Identifier.t)
-      | `Result x -> full_name_aux (x :> Identifier.t)
-      | `ModuleType (parent, name) ->
-          ModuleTypeName.to_string name
-          :: full_name_aux (parent :> Identifier.t)
-      | `Type (parent, name) ->
-          TypeName.to_string name :: full_name_aux (parent :> Identifier.t)
-      | `CoreType name -> [ TypeName.to_string name ]
-      | `Constructor (parent, name) ->
-          ConstructorName.to_string name
-          :: full_name_aux (parent :> Identifier.t)
-      | `Field (parent, name) ->
-          FieldName.to_string name :: full_name_aux (parent :> Identifier.t)
-      | `Extension (parent, name) ->
-          ExtensionName.to_string name :: full_name_aux (parent :> Identifier.t)
-      | `Exception (parent, name) ->
-          ExceptionName.to_string name :: full_name_aux (parent :> Identifier.t)
-      | `CoreException name -> [ ExceptionName.to_string name ]
-      | `Value (parent, name) ->
-          ValueName.to_string name :: full_name_aux (parent :> Identifier.t)
-      | `Class (parent, name) ->
-          ClassName.to_string name :: full_name_aux (parent :> Identifier.t)
-      | `ClassType (parent, name) ->
-          ClassTypeName.to_string name :: full_name_aux (parent :> Identifier.t)
-      | `Method (parent, name) ->
-          MethodName.to_string name :: full_name_aux (parent :> Identifier.t)
-      | `InstanceVariable (parent, name) ->
-          InstanceVariableName.to_string name
-          :: full_name_aux (parent :> Identifier.t)
-      | `Label (parent, name) ->
-          LabelName.to_string name :: full_name_aux (parent :> Identifier.t)
+  let full_name_aux : Odoc_model.Paths.Identifier.t -> string list =
+   fun _ -> [ "" ]
 
   let prefixname :
       [< Odoc_model.Paths.Identifier.t_pv ] Odoc_model.Paths.Identifier.id ->
@@ -112,29 +72,7 @@ module Generate = struct
     in
     let name = Odoc_model.Paths.Identifier.name id in
     let prefixname = prefixname id in
-    let kind =
-      match id.iv with
-      | `InstanceVariable _ -> "instance variable"
-      | `Parameter _ -> "parameter"
-      | `Module _ -> "module"
-      | `ModuleType _ -> "module type"
-      | `Method _ -> "method"
-      | `Field _ -> "field"
-      | `Result _ -> "result"
-      | `Label _ -> "label"
-      | `Type _ -> "type"
-      | `Exception _ -> "exception"
-      | `Class _ -> "class"
-      | `Page _ -> "page"
-      | `LeafPage _ -> "leaf page"
-      | `CoreType _ -> "core type"
-      | `ClassType _ -> "class type"
-      | `Value _ -> "val"
-      | `CoreException _ -> "core exception"
-      | `Constructor _ -> "constructor"
-      | `Extension _ -> "extension"
-      | `Root _ -> "root"
-    in
+    let kind = match id.iv with _ -> "instance variable" in
     let url = Odoc_html.Link.href ~config ~resolve:(Base "") url in
     let json =
       `Assoc
@@ -154,31 +92,8 @@ end
 module Load_doc = struct
   open Odoc_model.Paths
   open Odoc_model.Lang
-  open Odoc_model.Names
 
-  let rec is_internal : Identifier.t -> bool =
-   fun x ->
-    match x.iv with
-    | `Root (_, name) -> ModuleName.is_internal name
-    | `Page (_, _) -> false
-    | `LeafPage (_, _) -> false
-    | `Module (_, name) -> ModuleName.is_internal name
-    | `Parameter (_, name) -> ModuleName.is_internal name
-    | `Result x -> is_internal (x :> Identifier.t)
-    | `ModuleType (_, name) -> ModuleTypeName.is_internal name
-    | `Type (_, name) -> TypeName.is_internal name
-    | `CoreType name -> TypeName.is_internal name
-    | `Constructor (parent, _) -> is_internal (parent :> Identifier.t)
-    | `Field (parent, _) -> is_internal (parent :> Identifier.t)
-    | `Extension (parent, _) -> is_internal (parent :> Identifier.t)
-    | `Exception (parent, _) -> is_internal (parent :> Identifier.t)
-    | `CoreException _ -> false
-    | `Value (_, name) -> ValueName.is_internal name
-    | `Class (_, name) -> ClassName.is_internal name
-    | `ClassType (_, name) -> ClassTypeName.is_internal name
-    | `Method (parent, _) -> is_internal (parent :> Identifier.t)
-    | `InstanceVariable (parent, _) -> is_internal (parent :> Identifier.t)
-    | `Label (parent, _) -> is_internal (parent :> Identifier.t)
+  let is_internal : Identifier.t -> bool = fun x -> match x.iv with _ -> false
 
   let add t ppf =
     if is_internal t.id then ()
@@ -345,7 +260,7 @@ let generate_index dirs output =
   let units =
     List.filter_map
       (function
-        | { Odoc_odoc.Odoc_file.content = Unit_content unit; _ }
+        | { Odoc_odoc.Odoc_file.content = Unit_content (unit, _); _ }
           when not unit.hidden ->
             Some unit
         | _ -> None)

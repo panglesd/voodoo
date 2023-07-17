@@ -60,7 +60,8 @@ type child =
   | CPage of string
 (* page name, e.g. 'packages' *)
 
-let compile ?parent ?output path ~includes ~children =
+let compile ?(count_occurrences = false) ?parent ?output path ~includes
+    ~children =
   let cmd = Bos.Cmd.(v "odoc" % "compile" % Fpath.to_string path) in
   let cmd =
     match output with
@@ -69,8 +70,11 @@ let compile ?parent ?output path ~includes ~children =
   in
   let cmd =
     match parent with
-    | Some str -> Bos.Cmd.(cmd % "--parent" % Printf.sprintf "\"%s\"" str)
+    | Some str -> Bos.Cmd.(cmd % "--parent" % Printf.sprintf "%s" str)
     | None -> cmd
+  in
+  let cmd =
+    if count_occurrences then Bos.Cmd.(cmd % "--count-occurrences") else cmd
   in
   let cmd =
     Fpath.Set.fold
@@ -89,6 +93,12 @@ let compile ?parent ?output path ~includes ~children =
       cmd children
   in
   Format.eprintf "compile command: %a\n%!" Bos.Cmd.pp cmd;
+  (* let _ = *)
+  (*   let _ = read_line () in *)
+  (*   let cmd = Bos.Cmd.(v "odoc" % "--version") in *)
+  (*   let output = Util.lines_of_process cmd in *)
+  (*   List.iter (fun l -> Format.eprintf "which odoc: %s\n" l) output *)
+  (* in *)
   Util.lines_of_process cmd
 
 let link path ~includes ~output =

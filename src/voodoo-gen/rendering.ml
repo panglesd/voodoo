@@ -3,14 +3,16 @@ open Result
 
 let ( >>= ) r f = match r with Ok v -> f v | Error _ as e -> e
 
-let document_of_odocl ~syntax input =
+let documents_of_odocl ~syntax input =
   let open Odoc_document in
   Odoc_file.load input >>= fun unit ->
   match unit.content with
   | Odoc_file.Page_content odoctree ->
-      Ok (Renderer.document_of_page ~syntax odoctree)
-  | Unit_content odoctree ->
-      Ok (Renderer.document_of_compilation_unit ~syntax odoctree)
+      Ok [ Renderer.document_of_page ~syntax odoctree ]
+  | Source_tree_content srctree ->
+      Ok (Renderer.documents_of_source_tree ~syntax srctree)
+  | Unit_content (odoctree, _) ->
+      Ok [ Renderer.document_of_compilation_unit ~syntax odoctree ]
 
 let render_document ~output odoctree =
   let aux pages =
@@ -30,6 +32,12 @@ let render_document ~output odoctree =
             ~open_details:true ~as_json:true ())
        odoctree;
   Ok ()
+
+let render_documents ~output docs =
+  List.fold_left
+    (fun res doc ->
+      match res with Error e -> Error e | Ok () -> render_document ~output doc)
+    (Ok ()) docs
 
 let docs_ids parent docs =
   Odoc_file.load parent >>= fun root ->
@@ -61,8 +69,8 @@ let render ~output file =
   let open Odoc_document in
   let ( let* ) = Result.bind in
   let f = Fs.File.of_string (Fpath.to_string file) in
-  let* document = document_of_odocl ~syntax:Renderer.OCaml f in
-  let* () = render_document ~output document in
+  let* documents = documents_of_odocl ~syntax:Renderer.OCaml f in
+  let* () = render_documents ~output documents in
   let urls =
     let rec get_subpages document =
       document
@@ -71,24 +79,32 @@ let render ~output file =
                 get_subpages subpage.content)
          |> List.flatten)
     in
-    get_subpages document
+    let documents =
+      List.filter_map
+        (function Odoc_document.Types.Document.Page p -> Some p | _ -> None)
+        documents
+    in
+    let urlss = List.map get_subpages documents in
+    List.concat urlss
   in
   Ok urls
 
 let render_text ~id ~output doc =
   let url = Odoc_document.Url.Path.from_identifier id in
-  Markdown.read_plain doc url >>= render_document ~output
+  Markdown.read_plain doc url >>= fun p ->
+  let p = Odoc_document.Types.Document.Page p in
+  render_document ~output p
 
 let render_markdown ~id ~output doc =
   let url = Odoc_document.Url.Path.from_identifier id in
   match Markdown.read_md doc url with
-  | Ok page -> render_document ~output page
+  | Ok page -> render_document ~output (Odoc_document.Types.Document.Page page)
   | Error _ -> render_text ~id ~output doc
 
 let render_org ~id ~output doc =
   let url = Odoc_document.Url.Path.from_identifier id in
   match Markdown.read_org doc url with
-  | Ok page -> render_document ~output page
+  | Ok page -> render_document ~output (Odoc_document.Types.Document.Page page)
   | Error _ -> render_text ~id ~output doc
 
 let render_other ~output ~parent ~otherdocs =

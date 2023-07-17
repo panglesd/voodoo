@@ -6,6 +6,7 @@ type kind =
   | `Parameter of int
   | `Class
   | `ClassType
+  | `SourcePage
   | `File ]
 [@@deriving yojson]
 

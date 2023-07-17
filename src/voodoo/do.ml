@@ -105,7 +105,7 @@ let find_universe_and_version pkg_name =
   | _ :: _ :: u :: _, [ version ] -> Ok (u, Fpath.to_string version)
   | _ -> Error (`Msg (Format.sprintf "Failed to find package %s" pkg_name))
 
-let run pkg_name is_blessed failed =
+let run ?(count_occurrences = false) pkg_name is_blessed failed =
   let is_interesting p =
     List.mem (Fpath.get_ext p) [ ".cmti"; ".cmt"; ".cmi" ]
   in
@@ -210,8 +210,8 @@ let run pkg_name is_blessed failed =
       let includes = IncludePaths.get index si in
       let output = Sourceinfo.output_file si in
       ignore
-        (Odoc.compile ~parent:parent.Mld.name ~output si.path ~includes
-           ~children:[]);
+        (Odoc.compile ~count_occurrences ~parent:parent.Mld.name ~output si.path
+           ~includes ~children:[]);
       si.path :: compiled
   in
   let _ = ignore (Index.M.fold compile this_index.intern []) in
@@ -224,13 +224,13 @@ let run pkg_name is_blessed failed =
   Util.mkdir_p output;
   Index.M.iter
     (fun _ si ->
-      if Sourceinfo.is_hidden si then ()
-      else
-        ignore
-          (Odoc.link
-             (Sourceinfo.output_file si)
-             ~includes:all_includes
-             ~output:(Sourceinfo.output_odocl si)))
+      (* if Sourceinfo.is_hidden si then () *)
+      (* else *)
+      ignore
+        (Odoc.link
+           (Sourceinfo.output_file si)
+           ~includes:all_includes
+           ~output:(Sourceinfo.output_odocl si)))
     this_index.intern;
   let odocls =
     Index.M.fold
@@ -264,13 +264,14 @@ let run pkg_name is_blessed failed =
     Bos.OS.File.write Fpath.(output_path / "failed") "failed" |> Util.get_ok;
   ()
 
-let run_all () =
+let run_all ?(count_occurrences = false) () =
   Format.eprintf
     "Handling all packages. Getting dependency data from current opam switch\n\
      %!";
   let packages = Opam.all_opam_packages () in
   Format.eprintf "Metadata found";
   let deps = List.map (fun pkg -> (pkg, Opam.dependencies pkg)) packages in
+  let initial_time = Unix.gettimeofday () in
   let done_pkgs : Opam.package list ref = ref [] in
   let rec doit pkg =
     if List.mem pkg !done_pkgs then ()
@@ -280,10 +281,15 @@ let run_all () =
       | Some deps ->
           List.iter doit deps;
           Format.eprintf "Building docs for package %s\n%!" pkg.Opam.name;
-          (try run pkg.Opam.name true false
+          (try run ~count_occurrences pkg.Opam.name true false
            with e ->
              Format.eprintf "Ignoring failure %s!\n%!" (Printexc.to_string e));
           done_pkgs := pkg :: !done_pkgs
       | None -> ()
   in
-  List.iter doit packages
+  List.iter doit packages;
+  let final_time = Unix.gettimeofday () in
+  let d = int_of_float (final_time -. initial_time) in
+  Format.printf "Took %f seconds (%dmin%ds)\n"
+    (final_time -. initial_time)
+    (d / 60) (d mod 60)

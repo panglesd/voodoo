@@ -14,6 +14,7 @@ val compile_deps : Fpath.t -> (string * string * compile_dep list) option
 type child = CModule of string | CPage of string
 
 val compile :
+  ?count_occurrences:bool ->
   ?parent:string ->
   ?output:Fpath.t ->
   Fpath.t ->
