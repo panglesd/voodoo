@@ -43,7 +43,7 @@ let rec compile mld =
   in
   let includes = Fpath.Set.of_list extra_include in
   ignore
-    (Odoc.compile ?parent ~output:(output_file mld) mld.path ~includes
+    (Odoc.compile (ref 0.) ?parent ~output:(output_file mld) mld.path ~includes
        ~children:mld.children)
 
 let write mld contents =

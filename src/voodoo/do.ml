@@ -105,6 +105,9 @@ let find_universe_and_version pkg_name =
   | _ :: _ :: u :: _, [ version ] -> Ok (u, Fpath.to_string version)
   | _ -> Error (`Msg (Format.sprintf "Failed to find package %s" pkg_name))
 
+let time_compiling = ref 0.
+let time_linking = ref 0.
+
 let run ?(count_occurrences = false) pkg_name is_blessed failed =
   let is_interesting p =
     List.mem (Fpath.get_ext p) [ ".cmti"; ".cmt"; ".cmi" ]
@@ -210,8 +213,8 @@ let run ?(count_occurrences = false) pkg_name is_blessed failed =
       let includes = IncludePaths.get index si in
       let output = Sourceinfo.output_file si in
       ignore
-        (Odoc.compile ~count_occurrences ~parent:parent.Mld.name ~output si.path
-           ~includes ~children:[]);
+        (Odoc.compile time_compiling ~count_occurrences ~parent:parent.Mld.name
+           ~output si.path ~includes ~children:[]);
       si.path :: compiled
   in
   let _ = ignore (Index.M.fold compile this_index.intern []) in
@@ -227,7 +230,7 @@ let run ?(count_occurrences = false) pkg_name is_blessed failed =
       (* if Sourceinfo.is_hidden si then () *)
       (* else *)
       ignore
-        (Odoc.link
+        (Odoc.link time_linking
            (Sourceinfo.output_file si)
            ~includes:all_includes
            ~output:(Sourceinfo.output_odocl si)))
@@ -240,12 +243,12 @@ let run ?(count_occurrences = false) pkg_name is_blessed failed =
       this_index.intern []
   in
   ignore
-    (Odoc.link (Mld.output_file parent) ~includes:all_includes
+    (Odoc.link time_linking (Mld.output_file parent) ~includes:all_includes
        ~output:(Mld.output_odocl parent));
   List.iter
     (fun mldv ->
       ignore
-        (Odoc.link (Mld.output_file mldv) ~includes:all_includes
+        (Odoc.link time_linking (Mld.output_file mldv) ~includes:all_includes
            ~output:(Mld.output_odocl mldv)))
     mldvs;
   let odocls = odocls @ List.map Mld.output_odocl (parent :: mldvs) in
@@ -261,8 +264,7 @@ let run ?(count_occurrences = false) pkg_name is_blessed failed =
     |> Util.get_ok
   in
   if failed then
-    Bos.OS.File.write Fpath.(output_path / "failed") "failed" |> Util.get_ok;
-  ()
+    Bos.OS.File.write Fpath.(output_path / "failed") "failed" |> Util.get_ok
 
 let run_all ?(count_occurrences = false) () =
   Format.eprintf
@@ -271,7 +273,6 @@ let run_all ?(count_occurrences = false) () =
   let packages = Opam.all_opam_packages () in
   Format.eprintf "Metadata found";
   let deps = List.map (fun pkg -> (pkg, Opam.dependencies pkg)) packages in
-  let initial_time = Unix.gettimeofday () in
   let done_pkgs : Opam.package list ref = ref [] in
   let rec doit pkg =
     if List.mem pkg !done_pkgs then ()
@@ -288,8 +289,9 @@ let run_all ?(count_occurrences = false) () =
       | None -> ()
   in
   List.iter doit packages;
-  let final_time = Unix.gettimeofday () in
-  let d = int_of_float (final_time -. initial_time) in
-  Format.printf "Took %f seconds (%dmin%ds)\n"
-    (final_time -. initial_time)
-    (d / 60) (d mod 60)
+  let c = int_of_float !time_compiling in
+  let l = int_of_float !time_linking in
+  Format.printf "Compiling took %f seconds (%dmin%ds)\n" !time_compiling
+    (c / 60) (c mod 60);
+  Format.printf "Linking took %f seconds (%dmin%ds)\n" !time_linking (l / 60)
+    (l mod 60)

@@ -60,8 +60,9 @@ type child =
   | CPage of string
 (* page name, e.g. 'packages' *)
 
-let compile ?(count_occurrences = false) ?parent ?output path ~includes
+let compile time ?(count_occurrences = false) ?parent ?output path ~includes
     ~children =
+  let t = Unix.gettimeofday () in
   let cmd = Bos.Cmd.(v "odoc" % "compile" % Fpath.to_string path) in
   let cmd =
     match output with
@@ -99,9 +100,12 @@ let compile ?(count_occurrences = false) ?parent ?output path ~includes
   (*   let output = Util.lines_of_process cmd in *)
   (*   List.iter (fun l -> Format.eprintf "which odoc: %s\n" l) output *)
   (* in *)
-  Util.lines_of_process cmd
+  let res = Util.lines_of_process cmd in
+  time := Unix.gettimeofday () -. t +. !time;
+  res
 
-let link path ~includes ~output =
+let link time path ~includes ~output =
+  let t = Unix.gettimeofday () in
   let cmd =
     Bos.Cmd.(
       v "odoc" % "link" % Fpath.to_string path % "-o" % Fpath.to_string output)
@@ -112,7 +116,9 @@ let link path ~includes ~output =
       includes cmd
   in
   (* Format.eprintf "link: cmd=%a\n%!" Bos.Cmd.pp cmd; *)
-  Util.lines_of_process cmd
+  let res = Util.lines_of_process cmd in
+  time := Unix.gettimeofday () -. t +. !time;
+  res
 
 let html output path =
   let cmd =

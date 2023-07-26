@@ -14,6 +14,7 @@ val compile_deps : Fpath.t -> (string * string * compile_dep list) option
 type child = CModule of string | CPage of string
 
 val compile :
+  float ref ->
   ?count_occurrences:bool ->
   ?parent:string ->
   ?output:Fpath.t ->
@@ -22,5 +23,7 @@ val compile :
   children:child list ->
   string list
 
-val link : Fpath.t -> includes:Fpath.set -> output:Fpath.t -> string list
+val link :
+  float ref -> Fpath.t -> includes:Fpath.set -> output:Fpath.t -> string list
+
 val html : Fpath.t -> Fpath.t -> unit
